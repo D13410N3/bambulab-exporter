@@ -61,9 +61,6 @@ func TestBambuCollector(t *testing.T) {
 	expected := `# HELP bambu_ams_humidity_level AMS humidity index reported by the printer.
 # TYPE bambu_ams_humidity_level gauge
 bambu_ams_humidity_level{ams="0",printer="SERIAL"} 3
-# HELP bambu_ams_status Raw AMS status value reported by the printer.
-# TYPE bambu_ams_status gauge
-bambu_ams_status{printer="SERIAL"} 0
 # HELP bambu_ams_temperature_celsius AMS temperature in degrees Celsius.
 # TYPE bambu_ams_temperature_celsius gauge
 bambu_ams_temperature_celsius{ams="0",printer="SERIAL"} 24.5
@@ -149,7 +146,6 @@ bambu_wifi_signal_dbm{printer="SERIAL"} -42
 
 	metricNames := []string{
 		"bambu_ams_humidity_level",
-		"bambu_ams_status",
 		"bambu_ams_temperature_celsius",
 		"bambu_ams_tray_info",
 		"bambu_ams_tray_remaining_percent",

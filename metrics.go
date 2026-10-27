@@ -101,7 +101,8 @@ func newBambuCollector(serial string, state *printerState) *bambuCollector {
 	collector.sdCardPresent = collector.newDesc("bambu_sdcard_present",
 		"Whether an SD card is present (1) or not (0).")
 	collector.amsStatus = collector.newDesc("bambu_ams_status",
-		"Raw AMS status value reported by the printer.")
+		"AMS status as a one-hot set of states; 1 for the current state, 0 for known inactive states. Unknown raw values use state=\"unknown_state_<raw>\".",
+		"state")
 	collector.lightOn = collector.newDesc("bambu_light_on",
 		"Whether a printer light is on (1) or off (0).", "light")
 
@@ -205,7 +206,21 @@ func (c *bambuCollector) Collect(ch chan<- prometheus.Metric) {
 	if present, ok := boolAt(print, "sdcard"); ok {
 		emit(c.sdCardPresent, boolToFloat(present))
 	}
-	emitIf(c.amsStatus, "ams_status")
+	if raw, ok := floatAt(print, "ams_status"); ok {
+		state := amsStateName(int64(raw))
+		known := false
+		for _, candidate := range amsStatusStates {
+			value := 0.0
+			if candidate == state {
+				value = 1
+				known = true
+			}
+			emit(c.amsStatus, value, candidate)
+		}
+		if !known {
+			emit(c.amsStatus, 1, state)
+		}
+	}
 
 	if lights, ok := arrayAt(print, "lights_report"); ok {
 		for _, item := range lights {
@@ -352,4 +367,77 @@ func boolToFloat(value bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+// amsStatusStates is the stable set of known AMS states emitted for every
+// scrape. The active state is 1; all other known states are 0.
+var amsStatusStates = []string{
+	"idle",
+	"filament_change",
+	"rfid_identifying",
+	"assist",
+	"calibration",
+	"cold_pull",
+	"self_check",
+	"debug",
+	"printing",
+	"nozzle_heat",
+	"cut_filament",
+	"pull_current_filament",
+	"push_new_filament",
+	"purge_old_filament",
+	"check_position",
+	"wait",
+	"check_position_again",
+}
+
+// amsStateName maps the packed ams_status value to a single semantic state.
+// The high byte is the main status and the low byte is the sub-status.
+// 0x05 is not part of BambuStudio's public enum but is observed while the
+// printer is running a print, so it is exposed as "printing".
+func amsStateName(raw int64) string {
+	main := (raw >> 8) & 0xFF
+	sub := raw & 0xFF
+
+	switch main {
+	case 0x00:
+		return "idle"
+	case 0x01:
+		switch sub {
+		case 0x00:
+			return "filament_change"
+		case 0x02:
+			return "nozzle_heat"
+		case 0x03:
+			return "cut_filament"
+		case 0x04:
+			return "pull_current_filament"
+		case 0x05, 0x06:
+			return "push_new_filament"
+		case 0x07:
+			return "purge_old_filament"
+		case 0x08:
+			return "check_position"
+		case 0x09:
+			return "wait"
+		case 0x0B:
+			return "check_position_again"
+		}
+	case 0x02:
+		return "rfid_identifying"
+	case 0x03:
+		return "assist"
+	case 0x04:
+		return "calibration"
+	case 0x05:
+		return "printing"
+	case 0x07:
+		return "cold_pull"
+	case 0x10:
+		return "self_check"
+	case 0x20:
+		return "debug"
+	}
+
+	return "unknown_state_" + strconv.FormatInt(raw, 10)
 }

@@ -130,7 +130,7 @@ labels. All metrics are gauges except the counters ending in `_total`.
 | --- | --- | --- |
 | `bambu_wifi_signal_dbm` | `printer` | Wi-Fi signal strength. |
 | `bambu_sdcard_present` | `printer` | `1` when an SD card is present. |
-| `bambu_ams_status` | `printer` | Raw AMS status value. |
+| `bambu_ams_status` | `printer`, `state` | One-hot AMS activity state: `1` for the current state, `0` for the other known states. |
 | `bambu_light_on` | `printer`, `light` | `1` when the light is on, `0` when off. |
 | `bambu_hms_errors` | `printer` | Number of active HMS health messages. |
 | `bambu_hms_error` | `printer`, `code`, `attr`, `action` | Active HMS message, one series per message. |
@@ -140,8 +140,52 @@ labels. All metrics are gauges except the counters ending in `_total`.
 ### AMS and external spool
 
 These series appear only when the corresponding accessory or filament data is
-reported. On an A1 without AMS the `bambu_ams_*` series are absent, but the
-external spool (`vt_tray`) may still be reported.
+reported. On an A1 without AMS the AMS unit/tray series are absent, but
+`bambu_ams_status` is still reported because it is part of the print status.
+
+### AMS status states
+
+`bambu_ams_status` is a one-hot metric. Every known state is emitted on every
+scrape with value `0`, except the current state, which has value `1`:
+
+```text
+bambu_ams_status{printer="...",state="printing"} 1
+bambu_ams_status{printer="...",state="nozzle_heat"} 0
+```
+
+The raw printer value is packed as `main = (value >> 8) & 0xFF` and
+`sub = value & 0xFF`. The state names are:
+
+| State | Raw value | Meaning |
+| --- | --- | --- |
+| `idle` | `0x0000` | AMS idle |
+| `filament_change` | `0x0100` | Filament change, no specific sub-step |
+| `nozzle_heat` | `0x0102` | Heating the nozzle for a filament change |
+| `cut_filament` | `0x0103` | Cutting filament |
+| `pull_current_filament` | `0x0104` | Pulling the current filament |
+| `push_new_filament` | `0x0105`, `0x0106` | Pushing/feeding new filament |
+| `purge_old_filament` | `0x0107` | Purging old filament |
+| `check_position` | `0x0108` | Checking filament position |
+| `wait` | `0x0109` | Waiting |
+| `check_position_again` | `0x010B` | Checking filament position again |
+| `rfid_identifying` | `0x0200` | RFID identification |
+| `assist` | `0x0300` | AMS assist/feed complete |
+| `calibration` | `0x0400` | Calibration |
+| `printing` | `0x0500` | Printing. This main status is not in BambuStudio's public enum, but is observed while the printer is running a print. |
+| `cold_pull` | `0x0700` | Cold pull |
+| `self_check` | `0x1000` | Self-check |
+| `debug` | `0x2000` | Debug |
+
+For an unknown raw value, the exporter emits one series named
+`unknown_state_<raw>` with value `1`, where `<raw>` is the decimal
+`ams_status` value. All known states are `0` in that case. The old unlabeled
+raw `bambu_ams_status` series is no longer emitted; use the `state` label
+instead.
+
+BambuStudio distinguishes slightly different filament-loading sub-steps for
+`0x0105` and `0x0106` depending on whether an AMS or the external spool is
+loading (push new filament vs. confirm extruded). `ams_status` alone does not
+carry the loading path, so both are exposed as `push_new_filament`.
 
 | Metric | Labels | Description |
 | --- | --- | --- |
