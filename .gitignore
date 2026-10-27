@@ -1,0 +1,5 @@
+/bambulab-exporter
+/dist/
+/build.sh
+.env
+*.log

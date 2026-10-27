@@ -1,0 +1,7 @@
+.git
+bambulab-exporter
+build.sh
+dist
+.env
+*.log
+hack
