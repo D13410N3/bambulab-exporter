@@ -33,6 +33,7 @@ type bambuCollector struct {
 	printLayersTotal    *prometheus.Desc
 	printState          *prometheus.Desc
 	printError          *prometheus.Desc
+	printErrorInfo      *prometheus.Desc
 	printSpeedLevel     *prometheus.Desc
 	printSpeedMagnitude *prometheus.Desc
 
@@ -91,6 +92,8 @@ func newBambuCollector(serial string, state *printerState) *bambuCollector {
 		"Current print state; one series with the state label set to 1.", "state")
 	collector.printError = collector.newDesc("bambu_print_error_code",
 		"Printer-reported print error code (0 means no error).")
+	collector.printErrorInfo = collector.newDesc("bambu_print_error_info",
+		"Human-readable information about the active print error.", "code", "message")
 	collector.printSpeedLevel = collector.newDesc("bambu_print_speed_level",
 		"Speed level selected on the printer (1-4).")
 	collector.printSpeedMagnitude = collector.newDesc("bambu_print_speed_magnitude",
@@ -195,6 +198,10 @@ func (c *bambuCollector) Collect(ch chan<- prometheus.Metric) {
 		emit(c.printState, 1, strings.ToLower(state))
 	}
 	emitIf(c.printError, "print_error")
+	if code, ok := floatAt(print, "print_error"); ok && code != 0 {
+		hexCode, message := printErrorMessage(int64(code))
+		emit(c.printErrorInfo, 1, hexCode, message)
+	}
 	emitIf(c.printSpeedLevel, "spd_lvl")
 	emitIf(c.printSpeedMagnitude, "spd_mag")
 

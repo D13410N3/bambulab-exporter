@@ -121,6 +121,7 @@ labels. All metrics are gauges except the counters ending in `_total`.
 | `bambu_print_layer` | `printer` | Current layer. |
 | `bambu_print_layers_total` | `printer` | Total layers in the current print. |
 | `bambu_print_error_code` | `printer` | Printer-reported print error code (`0` means no error). |
+| `bambu_print_error_info` | `printer`, `code`, `message` | Human-readable description of the active print error. |
 | `bambu_print_speed_level` | `printer` | Speed level selected on the printer. |
 | `bambu_print_speed_magnitude` | `printer` | Speed magnitude in percent. |
 
@@ -207,6 +208,20 @@ scrape_configs:
 
 If you run multiple exporters for multiple printers, keep the `printer` label or
 add a `printer_name` relabel so the series remain distinguishable.
+
+### Print error decoding
+
+`bambu_print_error_code` exposes the raw numeric `print_error` value. When it is
+non-zero, `bambu_print_error_info` adds the 8-hex code and an English message,
+for example:
+
+```text
+bambu_print_error_info{printer="...",code="0500400C",message="Please insert a MicroSD card and restart the print job."} 1
+```
+
+Print error messages are embedded from Bambu Studio's `device_error` table (via
+ha-bambulab's `hms_en.json.gz`). Unknown codes use `message="Unknown print error"`.
+The HMS codes in `bambu_hms_error` are still exposed as raw `code`/`attr` labels.
 
 ## Docker
 
